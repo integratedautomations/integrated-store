@@ -87,36 +87,25 @@ def _repo_name(package: CatalogPackage) -> str | None:
     return repo.split("/")[-1].strip() or None
 
 
-def _predict_target_paths(package: CatalogPackage) -> list[str]:
-    """Config-relative paths this package plausibly already occupies.
+def _acceptable_dir_names(package: CatalogPackage) -> set[str]:
+    """Lower-cased directory-name candidates for a lovelace package.
 
-    More than one, because every store names card directories differently:
-    we use the catalog id, HACS uses the bare repository name, and YidStore
-    uses either that or its own `onoff/` vendor folder. Checking only our own
-    naming is why HACS-installed cards previously went undetected.
-
-    Integrations are simpler — the domain decides the directory for everyone.
+    Compared case-insensitively against a real directory listing rather than
+    checked as exact paths: different stores don't agree on casing (HACS uses
+    the repository's exact case, e.g. 'Bubble-Card'; we lower-case the catalog
+    id), and on a case-sensitive filesystem 'Bubble-Card' and 'bubble-card'
+    are different paths. Guessing at one exact casing per store is what missed
+    HACS installs before — comparing lower-cased names sidesteps needing to
+    know any store's convention at all.
     """
-    if package.category == CATEGORY_INTEGRATION:
-        if not package.domain:
-            return []
-        return [f"{PATH_CUSTOM_COMPONENTS}/{package.domain}"]
-
-    if package.category == CATEGORY_LOVELACE:
-        candidates: list[str] = []
-        try:
-            candidates.append(f"{PATH_WWW_COMMUNITY}/{slugify(package.id)}")
-        except ValidationError:
-            pass
-        if repo_name := _repo_name(package):
-            candidates.append(f"{PATH_WWW_COMMUNITY}/{repo_name}")
-            candidates.append(
-                f"{PATH_WWW_COMMUNITY}/{YIDSTORE_VENDOR_FOLDER}/{repo_name}"
-            )
-        # Deduplicate while keeping order: our own path is the most specific.
-        return list(dict.fromkeys(candidates))
-
-    return []
+    names: set[str] = set()
+    try:
+        names.add(slugify(package.id).lower())
+    except ValidationError:
+        pass
+    if repo_name := _repo_name(package):
+        names.add(repo_name.lower())
+    return names
 
 
 class IntegratedStoreManager:
@@ -207,18 +196,53 @@ class IntegratedStoreManager:
         yidstore_repos = await self._async_yidstore_repo_names()
 
         config_dir = Path(self.hass.config.config_dir)
-        candidates = {
-            package_id: _predict_target_paths(package)
+        acceptable_names = {
+            package_id: _acceptable_dir_names(package)
             for package_id, package in pending.items()
         }
 
+        def _list_dirs(path: Path) -> dict[str, str]:
+            """{lower-cased name: real name} for a directory's subdirectories."""
+            try:
+                return {p.name.lower(): p.name for p in path.iterdir() if p.is_dir()}
+            except OSError:
+                return {}
+
         def _scan() -> dict[str, str | None]:
-            """Return the first existing path per package, if any. Blocking."""
+            """Match each package against real directory listings. Blocking.
+
+            Listed once and compared case-insensitively, rather than checking
+            one exact-case path per package: this is what actually finds a
+            HACS install when the repository's real casing (e.g.
+            'Bubble-Card') differs from our lower-cased catalog id.
+            """
             found: dict[str, str | None] = {}
-            for package_id, relatives in candidates.items():
-                found[package_id] = next(
-                    (rel for rel in relatives if (config_dir / rel).exists()), None
-                )
+
+            components = _list_dirs(config_dir / PATH_CUSTOM_COMPONENTS)
+            community = _list_dirs(config_dir / PATH_WWW_COMMUNITY)
+            onoff = _list_dirs(config_dir / PATH_WWW_COMMUNITY / YIDSTORE_VENDOR_FOLDER)
+
+            for package_id, package in pending.items():
+                if package.category == CATEGORY_INTEGRATION:
+                    if package.domain and package.domain.lower() in components:
+                        real = components[package.domain.lower()]
+                        found[package_id] = f"{PATH_CUSTOM_COMPONENTS}/{real}"
+                    continue
+
+                if package.category != CATEGORY_LOVELACE:
+                    continue
+
+                names = acceptable_names[package_id]
+                match = next((n for n in community if n in names), None)
+                if match:
+                    found[package_id] = f"{PATH_WWW_COMMUNITY}/{community[match]}"
+                    continue
+                match = next((n for n in onoff if n in names), None)
+                if match:
+                    found[package_id] = (
+                        f"{PATH_WWW_COMMUNITY}/{YIDSTORE_VENDOR_FOLDER}/{onoff[match]}"
+                    )
+
             return found
 
         existing = await self.hass.async_add_executor_job(_scan)
