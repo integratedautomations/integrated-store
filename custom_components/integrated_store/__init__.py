@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -61,30 +62,61 @@ _LOGGER = logging.getLogger(__package__)
 
 PLATFORMS: list[Platform] = [Platform.UPDATE]
 
-#: HACS's own storage file. Reading it is best-effort: the schema is not a
-#: public API and is only used to upgrade a generic "files already exist"
-#: warning into a more specific "already installed via HACS" one.
+#: Other stores' own storage files. Reading them is best-effort: neither
+#: schema is a public API, and they are only used to label an already-present
+#: package with which store put it there.
 HACS_STORAGE_FILE = ".storage/hacs.repositories"
+YIDSTORE_STORAGE_FILE = ".storage/yidstore_packages"
+
+#: YidStore namespaces cards it installs from its Gitea store under this
+#: folder (www/community/onoff/<repo>), while GitHub cards use the plain
+#: HACS-style path.
+YIDSTORE_VENDOR_FOLDER = "onoff"
+
+SOURCE_LABELS = {
+    "hacs": "HACS",
+    "yidstore": "YidStore",
+}
 
 
-def _predict_target_path(package: CatalogPackage) -> str | None:
-    """Best-effort: where this package would land on disk if installed.
+def _repo_name(package: CatalogPackage) -> str | None:
+    """The bare repository name, e.g. 'Bubble-Card' for 'Clooos/Bubble-Card'."""
+    repo = package.source.get("repo")
+    if not isinstance(repo, str) or "/" not in repo:
+        return None
+    return repo.split("/")[-1].strip() or None
 
-    Used only to warn about pre-existing files before anything is downloaded.
-    The installer works out the real path once files are in hand, since an
-    integration's true install path depends on the domain declared inside its
-    downloaded manifest.json, not just the catalog entry.
+
+def _predict_target_paths(package: CatalogPackage) -> list[str]:
+    """Config-relative paths this package plausibly already occupies.
+
+    More than one, because every store names card directories differently:
+    we use the catalog id, HACS uses the bare repository name, and YidStore
+    uses either that or its own `onoff/` vendor folder. Checking only our own
+    naming is why HACS-installed cards previously went undetected.
+
+    Integrations are simpler — the domain decides the directory for everyone.
     """
     if package.category == CATEGORY_INTEGRATION:
         if not package.domain:
-            return None
-        return f"{PATH_CUSTOM_COMPONENTS}/{package.domain}"
+            return []
+        return [f"{PATH_CUSTOM_COMPONENTS}/{package.domain}"]
+
     if package.category == CATEGORY_LOVELACE:
+        candidates: list[str] = []
         try:
-            return f"{PATH_WWW_COMMUNITY}/{slugify(package.id)}"
+            candidates.append(f"{PATH_WWW_COMMUNITY}/{slugify(package.id)}")
         except ValidationError:
-            return None
-    return None
+            pass
+        if repo_name := _repo_name(package):
+            candidates.append(f"{PATH_WWW_COMMUNITY}/{repo_name}")
+            candidates.append(
+                f"{PATH_WWW_COMMUNITY}/{YIDSTORE_VENDOR_FOLDER}/{repo_name}"
+            )
+        # Deduplicate while keeping order: our own path is the most specific.
+        return list(dict.fromkeys(candidates))
+
+    return []
 
 
 class IntegratedStoreManager:
@@ -145,59 +177,83 @@ class IntegratedStoreManager:
             "needs_restart_on_change": package.category in RESTART_REQUIRED_CATEGORIES,
             "error": status.error,
             "external_conflict": None,
-            "external_conflict_via_hacs": False,
+            "external_conflict_source": None,
         }
 
     async def _async_external_conflicts(self) -> dict[str, dict[str, Any]]:
-        """Best-effort: not-yet-installed packages with files already on disk.
+        """Best-effort: packages already installed by something other than us.
 
-        Covers anything that put files at a package's target path outside of
-        IntegratedStore's own records: a manual copy, or another store entirely. HACS's
-        storage file is cross-referenced, when present, to distinguish the two:
-        each result carries both a confirm-before-install message and a
-        `via_hacs` flag the panel uses to label the badge accordingly.
+        Two independent signals, because either alone misses cases:
+
+        * Another store's own records (HACS, YidStore), matched by repository.
+          This is definitive and needs no path guessing, which matters because
+          every store names card directories differently.
+        * Files sitting at any path the package plausibly occupies. This is
+          the only signal for a hand-copied install, which no store recorded.
+
+        A registry match counts on its own — requiring a path match too is
+        what previously hid HACS-installed cards, since HACS names their
+        directory after the repository and we name ours after the catalog id.
         """
-        candidates: dict[str, str] = {}
-        for package in self.packages.values():
-            if self.store.get_installed(package.id):
-                continue
-            target = _predict_target_path(package)
-            if target:
-                candidates[package.id] = target
-
-        if not candidates:
+        pending = {
+            package.id: package
+            for package in self.packages.values()
+            if not self.store.get_installed(package.id)
+        }
+        if not pending:
             return {}
 
-        config_dir = Path(self.hass.config.config_dir)
         hacs_repos = await self._async_hacs_repo_names()
-        packages = self.packages
+        yidstore_repos = await self._async_yidstore_repo_names()
 
-        def _scan() -> dict[str, dict[str, Any]]:
-            found: dict[str, dict[str, Any]] = {}
-            for package_id, relative in candidates.items():
-                if not (config_dir / relative).exists():
-                    continue
-                package = packages[package_id]
-                repo = (
-                    str(package.source.get("repo", "")).lower()
-                    if package.source.get("type") == "github"
-                    else None
+        config_dir = Path(self.hass.config.config_dir)
+        candidates = {
+            package_id: _predict_target_paths(package)
+            for package_id, package in pending.items()
+        }
+
+        def _scan() -> dict[str, str | None]:
+            """Return the first existing path per package, if any. Blocking."""
+            found: dict[str, str | None] = {}
+            for package_id, relatives in candidates.items():
+                found[package_id] = next(
+                    (rel for rel in relatives if (config_dir / rel).exists()), None
                 )
-                via_hacs = bool(repo and repo in hacs_repos)
-                message = (
-                    f"Already installed via HACS at '{relative}'. Installing "
-                    "here will overwrite those files."
-                    if via_hacs
-                    else (
-                        f"Files already exist at '{relative}' from outside "
-                        "IntegratedStore (possibly HACS or a manual install). Installing "
-                        "will overwrite them."
-                    )
-                )
-                found[package_id] = {"message": message, "via_hacs": via_hacs}
             return found
 
-        return await self.hass.async_add_executor_job(_scan)
+        existing = await self.hass.async_add_executor_job(_scan)
+
+        conflicts: dict[str, dict[str, Any]] = {}
+        for package_id, package in pending.items():
+            repo = str(package.source.get("repo", "")).lower()
+            path = existing.get(package_id)
+
+            if repo and repo in hacs_repos:
+                source = "hacs"
+            elif repo and repo in yidstore_repos:
+                source = "yidstore"
+            elif path:
+                source = "other"
+            else:
+                continue
+
+            location = f" at '{path}'" if path else ""
+            if source == "other":
+                message = (
+                    f"Files already exist{location} from outside IntegratedStore "
+                    "(another store, or a manual install). Installing will "
+                    "overwrite them."
+                )
+            else:
+                message = (
+                    f"Already installed via {SOURCE_LABELS[source]}{location}. "
+                    "Installing here will overwrite those files, and may leave "
+                    "the card registered twice."
+                )
+
+            conflicts[package_id] = {"message": message, "source": source}
+
+        return conflicts
 
     async def _async_hacs_repo_names(self) -> set[str]:
         """Best-effort: lower-cased 'owner/repo' names HACS has installed.
@@ -206,7 +262,49 @@ class IntegratedStoreManager:
         so any failure to read or parse it is swallowed and treated as "nothing
         known to be installed via HACS" rather than raising.
         """
-        path = Path(self.hass.config.path(*HACS_STORAGE_FILE.split("/")))
+
+        def _extract(content: dict[str, Any]) -> set[str]:
+            names: set[str] = set()
+            for entry in content.values():
+                if not isinstance(entry, dict) or not entry.get("installed"):
+                    continue
+                if full_name := entry.get("full_name"):
+                    names.add(str(full_name).lower())
+            return names
+
+        return await self._async_read_repo_names(HACS_STORAGE_FILE, _extract)
+
+    async def _async_yidstore_repo_names(self) -> set[str]:
+        """Best-effort: lower-cased 'owner/repo' names YidStore has installed.
+
+        YidStore records each package with separate `owner` and `repo` fields
+        rather than a combined name, so both shapes are accepted. As with
+        HACS, this is another project's private storage format, so anything
+        unexpected degrades to "nothing known" instead of failing.
+        """
+
+        def _extract(content: dict[str, Any]) -> set[str]:
+            names: set[str] = set()
+            for entry in content.values():
+                if not isinstance(entry, dict):
+                    continue
+                if full_name := entry.get("full_name"):
+                    names.add(str(full_name).lower())
+                    continue
+                owner, repo = entry.get("owner"), entry.get("repo")
+                if owner and repo:
+                    names.add(f"{owner}/{repo}".lower())
+            return names
+
+        return await self._async_read_repo_names(YIDSTORE_STORAGE_FILE, _extract)
+
+    async def _async_read_repo_names(
+        self,
+        storage_file: str,
+        extract: Callable[[dict[str, Any]], set[str]],
+    ) -> set[str]:
+        """Read another store's storage file and pull repository names from it."""
+        path = Path(self.hass.config.path(*storage_file.split("/")))
 
         def _read() -> set[str]:
             try:
@@ -226,13 +324,11 @@ class IntegratedStoreManager:
             if not isinstance(content, dict):
                 return set()
 
-            names: set[str] = set()
-            for entry in content.values():
-                if not isinstance(entry, dict) or not entry.get("installed"):
-                    continue
-                if full_name := entry.get("full_name"):
-                    names.add(str(full_name).lower())
-            return names
+            try:
+                return extract(content)
+            except (AttributeError, TypeError, ValueError):
+                _LOGGER.debug("Could not parse %s", storage_file, exc_info=True)
+                return set()
 
         try:
             return await self.hass.async_add_executor_job(_read)
@@ -276,7 +372,7 @@ class IntegratedStoreManager:
         for item in packages:
             if conflict := conflicts.get(item["id"]):
                 item["external_conflict"] = conflict["message"]
-                item["external_conflict_via_hacs"] = conflict["via_hacs"]
+                item["external_conflict_source"] = conflict["source"]
         packages.sort(
             key=lambda item: (
                 not item["update_available"],
@@ -311,7 +407,7 @@ class IntegratedStoreManager:
                     "error": None,
                     "orphaned": True,
                     "external_conflict": None,
-                    "external_conflict_via_hacs": False,
+                    "external_conflict_source": None,
                 }
             )
 

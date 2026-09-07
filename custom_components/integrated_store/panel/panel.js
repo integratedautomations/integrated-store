@@ -26,6 +26,13 @@ const SOURCE_LABELS = {
   local: "Local",
 };
 
+// Which other store already put this package on disk, when we can tell.
+const CONFLICT_LABELS = {
+  hacs: "Installed via HACS",
+  yidstore: "Installed via YidStore",
+  other: "Already present",
+};
+
 const SOURCE_FIELDS = {
   github: [{ key: "repo", label: "Repository (owner/name)", required: true }],
   git_http: [
@@ -315,6 +322,13 @@ class IntegratedStorePanel extends HTMLElement {
   }
 
   async _action(id, endpoint, body) {
+    // Captured before the action: the package list is replaced afterwards,
+    // and an uninstall removes the entry entirely.
+    const before = (this._state ? this._state.packages : []).find(
+      (pkg) => pkg.id === id
+    );
+    let offerReload = false;
+
     this._busy.add(id);
     this._error = null;
     this._render();
@@ -324,11 +338,30 @@ class IntegratedStorePanel extends HTMLElement {
         this._messages = result.messages;
       }
       this._state = await this._call("get", "packages");
+      offerReload =
+        Boolean(before) &&
+        before.category === "lovelace" &&
+        (endpoint === "install" || endpoint === "update");
     } catch (err) {
       this._error = err.message;
     } finally {
       this._busy.delete(id);
       this._render();
+    }
+
+    if (offerReload) {
+      // A card's JavaScript is only pulled in when the page loads, so until
+      // the frontend reloads it either isn't there at all or is still the
+      // previously cached version. Prompt after rendering so the updated
+      // card is visible behind the dialog.
+      const verb = endpoint === "update" ? "updated" : "installed";
+      if (
+        window.confirm(
+          `${before.name} ${verb}. Reload the page now so the card loads?`
+        )
+      ) {
+        location.reload();
+      }
     }
   }
 
@@ -611,7 +644,7 @@ class IntegratedStorePanel extends HTMLElement {
         el(
           "span",
           { class: "badge conflict" },
-          pkg.external_conflict_via_hacs ? "Installed via HACS" : "Already present"
+          CONFLICT_LABELS[pkg.external_conflict_source] || "Already present"
         )
       );
     }

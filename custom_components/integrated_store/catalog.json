@@ -263,6 +263,16 @@
         "type": "github",
         "repo": "integratedautomations/integrated-strategy"
       }
+    },
+    {
+      "id": "lovelace-mushroom",
+      "name": "Mushroom",
+      "description": "A collection of modern, minimal cards for building Home Assistant dashboards.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "piitaya/lovelace-mushroom"
+      }
     }
   ]
 }
