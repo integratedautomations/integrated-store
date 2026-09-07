@@ -464,13 +464,34 @@ class IntegratedStoreManager:
     async def async_install(
         self, package_id: str, version: str | None = None
     ) -> dict[str, Any]:
-        """Install a package."""
+        """Install a package.
+
+        Refuses outright if the package looks like it's already on disk via
+        another store or a manual copy, rather than merely warning: installing
+        over it would create a second copy under a different directory name
+        and, for a card, a duplicate Lovelace resource — silently breaking the
+        card rather than updating it. The panel disables the button for the
+        same reason, but that's only a courtesy; this is the real block, since
+        the API can be called directly.
+        """
         async with self._lock:
             package = self._package(package_id)
             if self.store.get_installed(package_id):
                 raise ValidationError(
                     f"{package.name} is already installed. Use update instead."
                 )
+
+            conflicts = await self._async_external_conflicts()
+            if conflict := conflicts.get(package_id):
+                fix = (
+                    f"Uninstall it from {SOURCE_LABELS[conflict['source']]} first"
+                    if conflict["source"] in SOURCE_LABELS
+                    else "Remove the existing files first"
+                )
+                raise ValidationError(
+                    f"{conflict['message']} {fix}, then install it here."
+                )
+
             _LOGGER.info("Installing %s", package_id)
             return await self._async_download_and_install(package, version)
 

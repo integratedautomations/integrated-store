@@ -706,14 +706,11 @@ class IntegratedStorePanel extends HTMLElement {
 
     if (!pkg.installed) {
       const install = el("button", {}, busy ? "Installing…" : "Install");
-      install.disabled = busy || Boolean(pkg.error);
+      install.disabled = busy || Boolean(pkg.error) || Boolean(pkg.external_conflict);
+      if (pkg.external_conflict) {
+        install.title = `${pkg.external_conflict} Uninstall it there first.`;
+      }
       install.addEventListener("click", () => {
-        if (
-          pkg.external_conflict &&
-          !window.confirm(`${pkg.external_conflict}\n\nInstall anyway?`)
-        ) {
-          return;
-        }
         if (onStart) onStart();
         this._action(pkg.id, "install");
       });
