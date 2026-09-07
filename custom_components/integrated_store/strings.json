@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "IntegratedStore",
+        "description": "All fields are optional. Add credentials now or later from the integration's options.",
+        "data": {
+          "github_token": "GitHub personal access token",
+          "git_base_url": "Self-hosted Git base URL",
+          "git_token": "Self-hosted Git token",
+          "git_flavor": "Self-hosted Git type"
+        },
+        "data_description": {
+          "github_token": "Needed for private repositories, and raises the API rate limit for public ones.",
+          "git_base_url": "For example https://git.example.com (Gitea, Forgejo or GitLab).",
+          "git_token": "Access token for the self-hosted Git server.",
+          "git_flavor": "Which API the server speaks."
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "The base URL must start with http:// or https://.",
+      "token_without_url": "A self-hosted Git token needs a base URL as well."
+    },
+    "abort": {
+      "single_instance_allowed": "IntegratedStore is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "IntegratedStore options",
+        "description": "Leave a token field blank to keep the stored value, or type a single dash (-) to delete it. GitHub token stored: {github_token_set}. Self-hosted Git token stored: {git_token_set}.",
+        "data": {
+          "github_token": "GitHub personal access token",
+          "git_base_url": "Self-hosted Git base URL",
+          "git_token": "Self-hosted Git token",
+          "git_flavor": "Self-hosted Git type"
+        }
+      }
+    },
+    "error": {
+      "invalid_url": "The base URL must start with http:// or https://.",
+      "token_without_url": "A self-hosted Git token needs a base URL as well."
+    }
+  },
+  "issues": {
+    "restart_required": {
+      "title": "Restart Home Assistant to finish applying IntegratedStore changes",
+      "description": "One or more integrations installed or removed through IntegratedStore need Home Assistant to restart before the change takes effect. Open the IntegratedStore panel to see which packages are affected, then restart Home Assistant. This Repair clears itself automatically after the restart.",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Restart Home Assistant now?",
+            "description": "This restarts Home Assistant Core to finish applying an IntegratedStore install or removal. Everything will briefly disconnect."
+          }
+        }
+      }
+    }
+  }
+}

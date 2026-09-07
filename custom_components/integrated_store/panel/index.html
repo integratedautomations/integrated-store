@@ -1,0 +1,164 @@
+<!doctype html>
+<!--
+  Standalone harness for developing the IntegratedStore panel outside Home Assistant.
+
+  Inside Home Assistant this file is NOT what gets loaded: the integration
+  registers a `panel_custom` pointing at panel.js, and HA assigns the real
+  `hass` object to the <integrated-store-panel> element. That is what makes authenticated
+  API calls possible.
+
+  Open this file from the static mount while HA is running:
+      http://<your-ha>:8123/integrated_store_static/index.html
+  and it will talk to the real API using a long-lived access token you paste in.
+  With no token it falls back to sample data so you can iterate on the layout.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IntegratedStore (development harness)</title>
+    <style>
+      body { margin: 0; font-family: Roboto, system-ui, sans-serif; }
+      #token-bar {
+        display: flex;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #263238;
+        color: #fff;
+        align-items: center;
+        font-size: 13px;
+      }
+      #token-bar input { flex: 1; padding: 6px 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="token-bar">
+      <label for="token">Long-lived access token (blank = sample data):</label>
+      <input id="token" type="password" autocomplete="off" />
+      <button id="reload">Load</button>
+    </div>
+
+    <integrated-store-panel id="panel"></integrated-store-panel>
+
+    <script type="module">
+      import "./panel.js";
+
+      const SAMPLE = {
+        categories: ["integration", "lovelace", "blueprint"],
+        restart_required: true,
+        last_update_success: true,
+        packages: [
+          {
+            id: "browser-mod",
+            name: "Browser Mod",
+            description: "Turns browsers into controllable media players.",
+            category: "integration",
+            domain: "browser_mod",
+            icon: "mdi:monitor-dashboard",
+            custom: false,
+            source_type: "github",
+            installed: true,
+            installed_version: "2.3.0",
+            available_version: "2.3.2",
+            update_available: true,
+            needs_restart_on_change: true,
+            error: null,
+          },
+          {
+            id: "button-card",
+            name: "Button Card",
+            description: "Template-driven button card.",
+            category: "lovelace",
+            domain: null,
+            icon: "mdi:gesture-tap-button",
+            custom: false,
+            source_type: "github",
+            installed: false,
+            installed_version: null,
+            available_version: "4.1.2",
+            update_available: false,
+            needs_restart_on_change: false,
+            error: null,
+          },
+          {
+            id: "internal-thermostat",
+            name: "Internal Thermostat Logic",
+            description: "In-house climate integration on the private Gitea.",
+            category: "integration",
+            domain: "internal_thermostat",
+            icon: "mdi:thermostat",
+            custom: true,
+            source_type: "git_http",
+            installed: false,
+            installed_version: null,
+            available_version: null,
+            update_available: false,
+            needs_restart_on_change: true,
+            error: "Could not reach git.mydomain.com: connection refused",
+          },
+        ],
+      };
+
+      /**
+       * Minimal stand-in for the Home Assistant `hass` object: the panel uses
+       * callApi for everything except the restart button, which calls
+       * callService directly (matching how real HA frontend cards do it).
+       */
+      function makeHass(token) {
+        return {
+          async callApi(method, path, body) {
+            if (!token) {
+              if (method === "get") return structuredClone(SAMPLE);
+              throw { body: { error: "Read-only sample mode: no token set." } };
+            }
+            const response = await fetch(`/api/${path}`, {
+              method: method.toUpperCase(),
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: body ? JSON.stringify(body) : undefined,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw { body: data, status_code: response.status };
+            return data;
+          },
+          async callService(domain, service) {
+            if (!token) {
+              throw new Error("Read-only sample mode: no token set.");
+            }
+            const response = await fetch(`/api/services/${domain}/${service}`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+              body: "{}",
+            });
+            if (!response.ok) {
+              throw new Error(`Service call failed with HTTP ${response.status}`);
+            }
+          },
+        };
+      }
+
+      const panel = document.getElementById("panel");
+      const tokenInput = document.getElementById("token");
+
+      function load() {
+        // Re-create the element so `hass` is assigned fresh (the panel only
+        // loads data on the first assignment, matching HA's behaviour).
+        const fresh = document.createElement("integrated-store-panel");
+        panel.replaceWith(fresh);
+        fresh.id = "panel";
+        fresh.hass = makeHass(tokenInput.value.trim());
+      }
+
+      document.getElementById("reload").addEventListener("click", () => {
+        location.reload();
+      });
+
+      load();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,268 @@
+{
+  "version": 1,
+  "packages": [
+    {
+      "id": "dw-spectrum-playback-card",
+      "name": "DW Spectrum Playback Card",
+      "description": "Live streaming and archive playback for DW Spectrum / Digital Watchdog camera systems.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "igraph100/dw_spectrum_playback_card"
+      }
+    },
+    {
+      "id": "ha-restart-guard",
+      "name": "HA Restart Guard",
+      "description": "Warns you in Home Assistant's restart dialog when a timed automation or schedule is about to run or already mid-run, so a restart doesn't skip it.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "igraph100/ha-restart-guard"
+      },
+      "domain": "restart_guard"
+    },
+    {
+      "id": "dw-spectrum",
+      "name": "DW Spectrum",
+      "description": "DW Spectrum / Digital Watchdog IPVMS integration: cameras, recording modes, motion detection and system capacity.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "igraph100/DW_Spectrum"
+      },
+      "domain": "dw_spectrum"
+    },
+    {
+      "id": "yidstore",
+      "name": "YidStore",
+      "description": "An in-app store integration for discovering, installing and managing custom integrations, Lovelace cards and blueprints.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "onoffautomations/yidstore"
+      },
+      "domain": "yidstore"
+    },
+    {
+      "id": "yidcal",
+      "name": "YidCal",
+      "description": "Yiddish/Hebrew calendar integration: Hebrew dates, holiday tracking, prayer times, Yom Tov windows and liturgical sensors.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "hitchin999/YidCal"
+      },
+      "domain": "yidcal"
+    },
+    {
+      "id": "bubble-card",
+      "name": "Bubble Card",
+      "description": "Minimalist, customizable card collection with modern pop-ups and an integrated module store of 100+ community-made modules.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "Clooos/Bubble-Card"
+      }
+    },
+    {
+      "id": "spook",
+      "name": "Spook",
+      "description": "A powerful toolbox of extra automation tools and capabilities for Home Assistant.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "frenck/spook"
+      },
+      "domain": "spook"
+    },
+    {
+      "id": "ha-gehome",
+      "name": "GE Home (SmartHQ)",
+      "description": "Control and monitor GE WiFi-enabled appliances: fridges, ovens, dishwashers, laundry, water systems and more.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "simbaja/ha_gehome"
+      },
+      "domain": "ge_home"
+    },
+    {
+      "id": "browser-mod",
+      "name": "Browser Mod",
+      "description": "Turns browsers into controllable Home Assistant entities and media players, with popups and navigation.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "thomasloven/hass-browser_mod"
+      },
+      "domain": "browser_mod"
+    },
+    {
+      "id": "lovelace-auto-entities",
+      "name": "Auto-Entities",
+      "description": "Automatically populates Lovelace cards with entities matching flexible criteria (domain, state, area, device, templates).",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "thomasloven/lovelace-auto-entities"
+      }
+    },
+    {
+      "id": "advanced-camera-card",
+      "name": "Advanced Camera Card",
+      "description": "A feature-rich camera card with live feeds, event filtering, media browsing and fullscreen support.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "dermotduffy/advanced-camera-card"
+      }
+    },
+    {
+      "id": "switch-manager",
+      "name": "Switch Manager",
+      "description": "Centralized management of wireless switch button presses via event bus or MQTT, using configurable blueprints.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "Sian-Lee-SA/Home-Assistant-Switch-Manager"
+      },
+      "domain": "switch_manager"
+    },
+    {
+      "id": "lovelace-hourly-weather",
+      "name": "Hourly Weather",
+      "description": "Displays hourly weather forecasts as a colored horizontal bar with temperature, wind and precipitation.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "decompil3d/lovelace-hourly-weather"
+      }
+    },
+    {
+      "id": "custom-sonos-card",
+      "name": "Sonos Card",
+      "description": "A dashboard card optimized for managing multiple Sonos/media players with grouping, queues and favorites.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "punxaphil/custom-sonos-card"
+      }
+    },
+    {
+      "id": "lovelace-expander-card",
+      "name": "Expander Card",
+      "description": "A collapsible/expandable card for organizing Lovelace content.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "MelleD/lovelace-expander-card"
+      }
+    },
+    {
+      "id": "local-akuvox",
+      "name": "Local Akuvox",
+      "description": "Local network control of Akuvox intercoms, with lock entities for relay control and webhook event delivery.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "tykeal/homeassistant-local-akuvox"
+      },
+      "domain": "local_akuvox"
+    },
+    {
+      "id": "dashie-ha-integration",
+      "name": "Dashie",
+      "description": "Discovery and control of Dashie tablet dashboard devices: screen management, sensors, camera streams and media playback.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "jwlerch78/dashie-ha-integration"
+      },
+      "domain": "dashie"
+    },
+    {
+      "id": "hass-agent-net10",
+      "name": "HASS.Agent .NET10",
+      "description": "Exposes Windows HASS.Agent .NET10 devices via MQTT/WebSocket: media control, notifications, sensors and command buttons.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "v1k70rk4/HASS.Agent.NET10-Integration"
+      },
+      "domain": "hass_agent"
+    },
+    {
+      "id": "simple-tabs",
+      "name": "Simple Tabs",
+      "description": "A configurable tabs card that organizes multiple cards into a clean, swipeable, navigation-friendly layout.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "agoberg85/home-assistant-simple-tabs"
+      }
+    },
+    {
+      "id": "hikvision-next",
+      "name": "Hikvision Next",
+      "description": "Control Hikvision NVRs and IP cameras: alarm event detection and video streams.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "maciej-or/hikvision_next"
+      },
+      "domain": "hikvision_next"
+    },
+    {
+      "id": "scheduler-card",
+      "name": "Scheduler Card",
+      "description": "Lovelace interface for creating and managing Scheduler component entities: recurring tasks, time schemes and conditions.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "integratedautomations/scheduler-card"
+      }
+    },
+    {
+      "id": "scheduler-component",
+      "name": "Scheduler Component",
+      "description": "Creates scheduler entities for time-based device actions, with recurring schedules and conditions.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "integratedautomations/scheduler-component"
+      },
+      "domain": "scheduler"
+    },
+    {
+      "id": "honeywell-6160-card",
+      "name": "Honeywell 6160 Card",
+      "description": "A Lovelace card styled after the Honeywell 6160 alarm keypad.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "integratedautomations/honeywell-6160-card"
+      }
+    },
+    {
+      "id": "scheduler-copy-card",
+      "name": "Scheduler Copy Card",
+      "description": "Duplicates a Scheduler component schedule with an optional custom name, styled to match the Scheduler card.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "integratedautomations/scheduler-copy-card"
+      }
+    },
+    {
+      "id": "integrated-strategy",
+      "name": "Integrated Strategy",
+      "description": "A custom Lovelace dashboard strategy for automatically generating dashboards.",
+      "category": "lovelace",
+      "source": {
+        "type": "github",
+        "repo": "integratedautomations/integrated-strategy"
+      }
+    }
+  ]
+}

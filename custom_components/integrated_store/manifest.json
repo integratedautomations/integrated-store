@@ -1,0 +1,14 @@
+{
+  "domain": "integrated_store",
+  "name": "IntegratedStore",
+  "after_dependencies": ["lovelace"],
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["http", "frontend", "websocket_api", "repairs", "update"],
+  "documentation": "https://github.com/integratedautomations/integrated-store",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/integratedautomations/integrated-store/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
