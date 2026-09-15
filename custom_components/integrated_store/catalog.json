@@ -257,12 +257,13 @@
     {
       "id": "integrated-strategy",
       "name": "Integrated Strategy",
-      "description": "A custom Lovelace dashboard strategy for automatically generating dashboards.",
+      "description": "A custom Lovelace dashboard strategy for automatically generating dashboards, with its companion config card.",
       "category": "lovelace",
       "source": {
         "type": "github",
         "repo": "integratedautomations/integrated-strategy"
-      }
+      },
+      "entrypoints": ["home-dashboard-strategy.js", "home-dashboard-config-card.js"]
     },
     {
       "id": "lovelace-mushroom",

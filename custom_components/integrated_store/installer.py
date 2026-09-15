@@ -177,39 +177,59 @@ class Installer:
     async def _async_install_lovelace(
         self, package: CatalogPackage, version: str, content_root: Path
     ) -> InstallResult:
-        """Install into www/community/<slug>/ and register the resource."""
+        """Install into www/community/<slug>/ and register its resource(s).
+
+        Most packages are one card, one resource. A package can instead
+        declare `entrypoints` in the catalog (e.g. a dashboard strategy
+        shipped with a companion config card) to register several — each
+        named file becomes its own Lovelace module resource, all sharing the
+        one installed directory.
+        """
         slug = slugify(package.id)
-        files, main_js = await self.hass.async_add_executor_job(
-            _find_lovelace_files, content_root, slug
+        files = await self.hass.async_add_executor_job(
+            _find_lovelace_files, content_root
         )
+
+        if package.entrypoints:
+            entrypoints = await self.hass.async_add_executor_job(
+                _select_named_entrypoints, files, package.entrypoints
+            )
+        else:
+            entrypoint = await self.hass.async_add_executor_job(
+                _select_default_entrypoint, files, slug
+            )
+            entrypoints = [entrypoint]
 
         target = self._target(f"{PATH_WWW_COMMUNITY}/{slug}")
         common = await self._async_swap_files(files, target)
 
-        # The entrypoint keeps its position relative to the other files, so the
-        # resource URL has to follow it rather than assume the top level.
-        main_relative = main_js.relative_to(common).as_posix()
-        # Tag the URL with the version, the same trick HACS uses for its own
-        # entrypoint. Without this, updating a card overwrites the file on
+        # Each entrypoint keeps its position relative to the other files, so
+        # its resource URL has to follow it rather than assume the top level.
+        # Every URL is tagged with the version, the same trick HACS uses for
+        # its own entrypoint: without it, updating overwrites the file on
         # disk at the exact same URL the browser (and the frontend's own ES
         # module cache) already has cached, so the old code keeps running
-        # until someone manually edits the resource to force a new URL —
-        # which is the whole reason this exists.
-        resource_url = f"{LOVELACE_RESOURCE_BASE}/{slug}/{main_relative}?integrated_storetag={version}"
+        # until someone manually edits the resource to force a new URL.
+        new_urls = [
+            f"{LOVELACE_RESOURCE_BASE}/{slug}/"
+            f"{entrypoint.relative_to(common).as_posix()}?integrated_storetag={version}"
+            for entrypoint in entrypoints
+        ]
+
         messages: list[str] = []
         registered: list[str] = []
 
         previous = self.store.get_installed(package.id)
         if previous:
-            for stale_url in previous.lovelace_resources:
-                if stale_url != resource_url:
-                    await self._async_remove_lovelace_resource(stale_url)
+            for stale_url in set(previous.lovelace_resources) - set(new_urls):
+                await self._async_remove_lovelace_resource(stale_url)
 
-        added, message = await self._async_add_lovelace_resource(resource_url)
-        if added:
-            registered.append(resource_url)
-        if message:
-            messages.append(message)
+        for resource_url in new_urls:
+            added, message = await self._async_add_lovelace_resource(resource_url)
+            if added:
+                registered.append(resource_url)
+            if message:
+                messages.append(message)
 
         return InstallResult(
             package=InstalledPackage(
@@ -486,40 +506,63 @@ def _find_integration(root: Path) -> tuple[Path, dict[str, Any]]:
     )
 
 
-def _find_lovelace_files(root: Path, slug: str) -> tuple[list[Path], Path]:
-    """Locate the JS files to install and the entrypoint. Blocking.
+def _find_lovelace_files(root: Path) -> list[Path]:
+    """Locate every distributable file to install. Blocking.
 
     Prefers a `dist/` directory when present (the usual build output), falling
-    back to JS files at the repository root. Returns the entrypoint as a path so
-    the caller can work out its location relative to the installed directory —
-    a bundle in a subfolder still needs a correct resource URL.
+    back to JS files at the repository root. This only discovers *what to
+    copy*; picking which file(s) become registered Lovelace resources is a
+    separate step, since a package can need more than one (a dashboard
+    strategy shipped alongside its companion card, for instance).
     """
     dist = root / "dist"
     if dist.is_dir():
-        files = [item for item in sorted(dist.rglob("*")) if item.is_file()]
-        # Prefer a bundle at the top of dist/ over a nested chunk.
-        js_files = [
-            item for item in files if item.suffix == ".js" and item.parent == dist
-        ] or [item for item in files if item.suffix == ".js"]
-    else:
-        files = [
-            item
-            for item in sorted(root.iterdir())
-            if item.is_file() and item.suffix in (".js", ".map", ".mjs")
-        ]
-        js_files = [item for item in files if item.suffix in (".js", ".mjs")]
+        return [item for item in sorted(dist.rglob("*")) if item.is_file()]
+    return [
+        item
+        for item in sorted(root.iterdir())
+        if item.is_file() and item.suffix in (".js", ".map", ".mjs")
+    ]
 
+
+def _select_default_entrypoint(files: list[Path], slug: str) -> Path:
+    """Auto-pick the one entrypoint for a package that doesn't declare any.
+
+    Prefers the shallowest files (a bundle at the top of dist/, not a nested
+    chunk), then an exact slug match, then the shortest name — in practice the
+    bundle rather than a chunk or a minified variant. Used only when the
+    catalog doesn't list explicit `entrypoints`: with more than one real
+    entrypoint in a package (see `_select_named_entrypoints`), this heuristic
+    can't tell them apart and has no business guessing.
+    """
+    js_files = [item for item in files if item.suffix in (".js", ".mjs")]
     if not js_files:
         raise ValidationError(
             "Could not find any JavaScript files to install for this card."
         )
 
-    # Pick the entrypoint: an exact slug match, else the shortest name, which
-    # in practice is the bundle rather than a chunk or a minified variant.
-    named = [item for item in js_files if item.stem == slug]
-    main = named[0] if named else min(js_files, key=lambda item: len(item.name))
+    min_depth = min(len(item.parts) for item in js_files)
+    shallow = [item for item in js_files if len(item.parts) == min_depth]
 
-    return files, main
+    named = [item for item in shallow if item.stem == slug]
+    return named[0] if named else min(shallow, key=lambda item: len(item.name))
+
+
+def _select_named_entrypoints(files: list[Path], names: list[str]) -> list[Path]:
+    """Resolve catalog-declared entrypoint filenames against what was found.
+
+    Exact match on filename (not a heuristic): these names come from our own
+    catalog entry describing this exact package, not from guessing at another
+    store's naming convention, so there is nothing to be fuzzy about — a
+    mismatch means the catalog entry itself needs fixing.
+    """
+    by_name = {item.name: item for item in files}
+    missing = [name for name in names if name not in by_name]
+    if missing:
+        raise ValidationError(
+            f"Declared entrypoint(s) not found in the download: {', '.join(missing)}."
+        )
+    return [by_name[name] for name in names]
 
 
 def _find_blueprints(root: Path) -> dict[str, list[Path]]:

@@ -90,6 +90,27 @@ refused if the downloaded `manifest.json` declares a different domain, which
 stops a mis-pointed catalog entry from overwriting an unrelated integration.
 `icon` is either an `mdi:` name or an `https://` URL.
 
+For a `lovelace` package, `entrypoints` is optional: a list of exact filenames
+(matched against whatever the download contains — `dist/` if present, else the
+repository root) to register as separate Lovelace module resources, one URL
+each. Use it when a repository ships more than one thing that needs its own
+resource, e.g. a dashboard strategy alongside its companion config card:
+
+```json
+{
+  "id": "integrated-strategy",
+  "category": "lovelace",
+  "source": { "type": "github", "repo": "owner/integrated-strategy" },
+  "entrypoints": ["home-dashboard-strategy.js", "home-dashboard-config-card.js"]
+}
+```
+
+Every file the download contains is still installed either way — `entrypoints`
+only changes which of them get registered as resources. Leave it out (the
+default) for the common case of one card, one resource, which is
+auto-detected: an exact match on the catalog `id`, else the shortest bundle at
+the shallowest depth (skipping build chunks nested under `dist/`).
+
 ### Source blocks
 
 ```jsonc

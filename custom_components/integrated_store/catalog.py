@@ -36,6 +36,10 @@ class CatalogPackage:
     brand_icon: str | None = None
     custom: bool = False
     extra: dict[str, Any] = field(default_factory=dict)
+    #: Lovelace only. Explicit filenames to register as separate resources
+    #: (e.g. a dashboard strategy shipped with a companion config card).
+    #: Empty means "auto-detect the one entrypoint", the previous behaviour.
+    entrypoints: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, custom: bool = False) -> CatalogPackage:
@@ -60,6 +64,15 @@ class CatalogPackage:
 
         domain = data.get("domain")
 
+        entrypoints_raw = data.get("entrypoints", [])
+        if not isinstance(entrypoints_raw, list) or not all(
+            isinstance(item, str) and item for item in entrypoints_raw
+        ):
+            raise ValidationError(
+                f"Package '{package_id}': 'entrypoints' must be a list of "
+                "non-empty filenames."
+            )
+
         return cls(
             id=package_id,
             name=data.get("name") or package_id,
@@ -70,6 +83,7 @@ class CatalogPackage:
             icon=data.get("icon") or _default_icon(source),
             brand_icon=_brand_icon(category, domain),
             custom=custom,
+            entrypoints=list(entrypoints_raw),
         )
 
     @classmethod
