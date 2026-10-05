@@ -274,6 +274,17 @@
         "type": "github",
         "repo": "piitaya/lovelace-mushroom"
       }
+    },
+    {
+      "id": "more-info-cards",
+      "name": "More-Info Cards",
+      "description": "Adds Lovelace cards (like the scheduler card) to the stock more-info dialog based on rules, on every dashboard and the companion app. Includes a rule editor page.",
+      "category": "integration",
+      "source": {
+        "type": "github",
+        "repo": "integratedautomations/more-info-cards"
+      },
+      "domain": "more_info_cards"
     }
   ]
 }
